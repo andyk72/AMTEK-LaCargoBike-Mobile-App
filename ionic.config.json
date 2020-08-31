@@ -1,0 +1,7 @@
+{
+  "name": "cargobikes-mobile-frontend",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "react"
+}
