@@ -7,6 +7,8 @@ Tech Stack
 ----------
 
 Ionic React
+Redux
+Leaflet.js
 
 Theme
 -----
