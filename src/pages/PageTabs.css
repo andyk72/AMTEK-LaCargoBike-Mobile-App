@@ -1,0 +1,9 @@
+.cb-tab-button-icon,
+.cb-tab-button-label {
+    color: #eee
+}
+
+.tab-selected .cb-tab-button-icon,
+.tab-selected .cb-tab-button-label {
+    color: red
+}

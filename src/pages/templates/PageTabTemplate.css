@@ -1,0 +1,12 @@
+.cb-page-tab .cb-page-content {
+    height: 100%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+ion-tab-button {
+    --color-selected: var(--ion-color-primary)
+}
