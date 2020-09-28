@@ -6,6 +6,7 @@ import {
 } from '@ionic/react';
 
 import PageTemplate from '../templates/PageTemplate';
+import Logo from '../../components/Logo/Logo';
 import Login from '../../components/Login/Login';
 
 import useIonicTabWithoutTabBar from '../../hooks/useIonicTabWithoutTabBar';
@@ -18,6 +19,7 @@ const PageHome: React.FC = () => {
 
     return(
         <PageTemplate id="home" title="Home">
+            <Logo />
             <Login redirect={{authorized: '/dashboard', denied:'/accessDenied'}} />
         </PageTemplate>
     );
