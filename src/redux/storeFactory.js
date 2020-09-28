@@ -1,4 +1,5 @@
 import { createStore } from 'redux';
+import { getItem } from '../utils/objectUtil';
 
 let store = null;
 
@@ -20,3 +21,11 @@ export const factory = (reducer) => {
  * @returns {Object}
  */
 export const getStore = () => store;
+
+/**
+ * Returns the piece of state defined by piecePath
+ * @param {String} piecePath 
+ */
+export const getPieceOfState = (piecePath) => {
+    return getItem(piecePath, getStore().getState());
+};

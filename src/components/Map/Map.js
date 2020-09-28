@@ -1,10 +1,40 @@
+/**
+ * Map Component
+ * 
+ *  The leaflet map is instantiated once a GeolocationEvents.ON_GET_CURRENT_POSITION event is fired.
+ *  This is because the map must be instantiated centered at the device's current position.
+ * 
+ * @Redux Connected
+ * 
+ *  mapDispatch
+ * 
+ *      .geolocatorSet(geolocator: Geolocation)
+ *      .mapInstanceSet(mapInstance: LeafletMap)
+ *      .positionWatcherFromMapRegister
+ *      .positionDetected(position)
+ * 
+ * @Local State Reducer
+ * 
+ *  .geolocator {Geolocation}
+ *  .map {LeafletMap}
+ * 
+ * @Dependencies
+ * 
+ *  leaflet.js
+ */
+
 import React from 'react';
 
 import { connect } from 'react-redux';
-import { coordsRegister } from '../../redux/actions/actionsGeolocation';
+import { getPieceOfState as appStorePieceOfState } from '../../redux/storeFactory';
+import {
+    geolocatorSet,
+    coordsRegister,
+    positionWatcherFromMapRegister
+} from '../../redux/actions/actionsGeolocation';
+import { mapInstanceSet } from '../../redux/actions/actionsMap';
 
-import { GeolocationEvents } from '../../libs/geolocation/geolocation';
-import useGeolocation from '../../libs/geolocation/react/useGeolocation';
+import Geolocation, { GeolocationEvents } from '../../libs/geolocation/geolocation';
 import { geolocationCoordinatesToLatLng } from '../../data/geolocationFormatter';
 
 import LeafletMap from '../../libs/leaflet/LeafletMap';
@@ -13,95 +43,177 @@ import '../../libs/leaflet/assets/leaflet.css'; // leaflet native css
 import '../../libs/leaflet/assets/leaflet-routing-machine.css'; // leaflet-routing-machine native css
 import styles from './Map.module.css';
 
+// Redux dispatch to props
 const mapDispatch = dispatch => ({
+    geolocatorSet: geolocator => {
+        dispatch(geolocatorSet(geolocator))
+    },
+    mapInstanceSet: mapInstance => {
+        dispatch(mapInstanceSet(mapInstance))
+    },
+    positionWatcherFromMapRegister: () => {
+        dispatch(positionWatcherFromMapRegister());
+    },
     positionDetected: position => {
         dispatch(coordsRegister(position.coords));
     }
 });
 
+// Component state reducer
+const initialState = {
+    geolocator: null,
+    map: null
+};
+const actionsTypes = {
+    SET_GEOLOCATOR: 'SET_GEOLOCATOR',
+    SET_MAP: 'SET_MAP'
+};
+const reducer = (state, action) => {
+    switch(action.type) {
+        case actionsTypes.SET_GEOLOCATOR:
+            return {
+                ...state,
+                geolocator: action.geolocator
+            };
+        case actionsTypes.SET_MAP:
+            return {
+                ...state,
+                map: action.map
+            };
+        default:
+            return state;
+    }
+}
+
 const Map = (props) => {
 
-    const [leafletMap, setLeafletMap] = React.useState(null);
+    const [state, dispatch] = React.useReducer(reducer, initialState);
 
-    const geolocator = useGeolocation({
-        subscriptions: [
-            {
-                event: GeolocationEvents.ON_GET_CURRENT_POSITION,
-                callback: (position) => {
-                    if (!leafletMap) {
-                        leafletMapInit({
-                            position
-                        });
-                    }
-                }
-            }
-        ]
-    });
-
+    /**
+     * Fired on mount
+     * If geolocator does not exist in app store -> creates it and stores it in Component state (and in the app store)
+     * If geolocator and map exist inapp astore -> update map's center to device position
+     */
     React.useEffect(() => {
-        console.log('================================================> Map.useEffect ONMOUNT');
-        console.log('    leafletMap = ', leafletMap);
-        console.log('    geolocator = ', geolocator);
+
+        let geolocator = appStorePieceOfState('geolocation.geolocator');
+        let map = appStorePieceOfState('map.mapInstance');
+
+        // geolocator does not exist -> create it and dispatch to local reducer
+        if (!geolocator) {
+            geolocator = createGeolocator();
+            dispatch({
+                type: actionsTypes.SET_GEOLOCATOR,
+                geolocator
+            });
+        }
+
+        // geolocator and map exist -> force a geolocation read which will cause a map render update
+        if (geolocator && map) {
+            geolocator.getPosition();
+        }
+
     }, []);
 
-    // When leafletMap is instantiated -> subscribe to watch
+    /**
+     * Fired when map has been created (on state.map update)
+     * Registers geolocator.WATCH_POSITION listener, if it has not yet been registered
+     */
     React.useEffect(() => {
-        console.log('================================================> Map.useEffect leafletMap DIDUPDATE');
-        console.log('    leafletMap = ', leafletMap);
-        console.log('    geolocator = ', geolocator);
-        if (leafletMap && geolocator) {
+
+        const geolocator = appStorePieceOfState('geolocation.geolocator');
+        const map = appStorePieceOfState('map.mapInstance');
+        const positionWatcherRegistered = appStorePieceOfState('geolocation.positionWatcherFromMapRegistered');
+
+        if (geolocator !== null && map !== null && !positionWatcherRegistered) {
+            console.log('    SETUP WATCHING');
             geolocator.subscribe(
                 GeolocationEvents.ON_WATCH_POSITION,
                 (position) => {
                     console.log('ON_WATCH_POSITION');
                     console.log('    position = ', position);
                     props.positionDetected(position);
-                    leafletMap.updateCenter(geolocationCoordinatesToLatLng(position.coords));
+                    map.updateCenter(geolocationCoordinatesToLatLng(position.coords));
                 }
             );
+            props.positionWatcherFromMapRegister();
         }
-    }, [leafletMap]);
 
-    /*
-    const geolocator = useGeolocation({
-        subscriptions: [
-            {
-                event: GeolocationEvents.ON_GET_CURRENT_POSITION,
-                callback: (position) => {
-                    if (!leafletMap) {
-                        leafletMapInit({
-                            position
-                        });
-                    }
-                }
-            }
-        ]
-    });
-    */
-
-    const onClickHandler = (evt) => {};
+    }, [state.map]);
 
     /**
-     * Inits (renders) LeafletMap instance
+     * Returns the geolocator instance
+     * a) If geolocator is already stored in the app store, that instance is returned
+     * b) Else, geolocator is instantiated and stored into the app store
+     * Subscribes a GeolocationEvents.ON_GET_CURRENT_POSITION listener which will cause a map render on evry occurrence of that event
+     */
+    const createGeolocator = () => {
+
+        let geolocator;
+
+        // read geolocator from the app store
+        const appGeolocator = appStorePieceOfState('geolocation.geolocator');
+
+        // return app store geolocator if it exists
+        if (appGeolocator) {
+            console.log('appGeolocator exists!!!');
+            geolocator = appGeolocator;
+        } else {
+            console.log('appGeolocator does not exist');
+            // create a geolocator instance
+            geolocator = Geolocation.factory({
+                subscriptions: [
+                    {
+                        event: GeolocationEvents.ON_GET_CURRENT_POSITION,
+                        callback: (position) => {
+                            renderMap({ position });
+                        }
+                    }
+                ]
+            });
+            // store geolocator instance into the app store
+            props.geolocatorSet(geolocator);
+        }
+
+        return geolocator;  
+
+    };
+
+    /**
+     * Manages map rendering
+     *  Creates map if it does not exist in app store (= on first call)
+     *  Updates map it it already ecists in app store (= on following calls)
+     * @param {Object} options
+     *  .position
+     *      .coords
+     *          .latitude
+     *          .longitude
+     */
+    const renderMap = ({ position }) => {
+
+        const appMap = appStorePieceOfState('map.mapInstance');
+
+        if (appMap !== null) {
+            renderMapUpdate(appMap, { position });
+        } else {
+            renderMapCreate({ position });
+        }
+
+    };
+    /**
+     * Creates map as a LeafletMap instance
+     * Positions map at position
+     * Stores map instance into Component state and into application store
      * @param {Object} options
      *  .position
      *      .coords
      *          .latitude
      *          .longitude 
      */
-    const leafletMapInit = ({ position }) => {
-
-        console.log('Map.leafletMapInit()');
-        console.log('   leafletMap = ', leafletMap);
-        console.log('    geolocator = ', geolocator);
-
-        // Exit if leafletMap has already been instantiated
-        if (leafletMap) {
-            return;
-        }
+    const renderMapCreate = ({ position }) => {
 
         const startCenter = [position.coords.latitude, position.coords.longitude];
-        
+
         // Create LeafletMap instance
         const map = new LeafletMap({
             startCenter
@@ -116,13 +228,29 @@ const Map = (props) => {
         //    [57.6792, 11.949]
         //]);
 
-        // store LeafletMap instance in component state
-        setLeafletMap(map);
+        // store map instance in component state and in app store
+        dispatch({ type: actionsTypes.SET_MAP, map });
+        props.mapInstanceSet(map);
 
-    }
+    };
+
+    /**
+     * Rerenders map at options.position
+     * @param {LeafletMap} map 
+     * @param {Object} options 
+     *  .position
+     *      .coords
+     *          .latitude
+     *          .longitude 
+     */
+    const renderMapUpdate = (map, { position }) => {
+        map.render({
+            startCenter: geolocationCoordinatesToLatLng(position.coords)
+        });
+    };
 
     return (
-        <div id="map" className={ styles.map } onClick={ onClickHandler }></div>
+        <div id="map" className={ styles.map }></div>
     );
 
     /**

@@ -28,6 +28,8 @@ class Geolocation {
 
     constructor(options = {}) {
 
+        console.log('Geolocation()', options);
+
         // init properties
         this.subscriptions = {};
         this.positionWatcher = null;
@@ -52,6 +54,7 @@ class Geolocation {
     }
 
     initPosition() {
+        console.log('Geolocation.initPosition()');
         this.getPosition();
     }
 
@@ -99,6 +102,7 @@ class Geolocation {
     }
 
     getPosition(callback) {
+        console.log('Geolocation.getPosition()');
         /**
          * @param {Object} position
          *  .coords

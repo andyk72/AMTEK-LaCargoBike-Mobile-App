@@ -1,6 +1,11 @@
 export default {
     geolocation: {
+        geolocator: null,
         coords: null,
-        coordsHistory: []
+        coordsHistory: [],
+        positionWatcherFromMapRegistered: false
+    },
+    map: {
+        mapInstance: null
     }
 };
